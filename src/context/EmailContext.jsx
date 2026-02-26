@@ -274,6 +274,30 @@ export const EmailProvider = ({ children }) => {
         }
     }, [messagesState, selectedEmailId, showToast]);
 
+    const onRestore = useCallback(async (idsOrSingle) => {
+        const ids = Array.isArray(idsOrSingle) ? idsOrSingle : [idsOrSingle];
+        const previous = [...messagesState];
+        // Optimistic update — remove isDeleted flag and reset folder
+        setMessagesState(prev =>
+            prev.map(m =>
+                ids.includes(m.id)
+                    ? { ...m, isDeleted: false, folder_id: 'primary' }
+                    : m
+            )
+        );
+        // Clear view
+        if (ids.includes(selectedEmailId)) setSelectedEmailId(null);
+        // Clear cache
+        cacheRef.current = {};
+        try {
+            await apiService.messages.updateFlags(ids, { is_deleted: false, folder_id: 'primary' });
+            showToast({ message: `Email restored to Inbox`, type: 'success' });
+        } catch {
+            setMessagesState(previous);
+            showToast({ message: 'Restore failed', type: 'error' });
+        }
+    }, [messagesState, selectedEmailId, showToast]);
+
     const onToggleStar = useCallback(async (id, starred) => {
         setMessagesState(prev => prev.map(m => m.id === id ? { ...m, isStarred: starred } : m));
         // Clear cache on mutation
@@ -349,6 +373,7 @@ export const EmailProvider = ({ children }) => {
         onUpdateStatus,
         onArchive,
         onDelete,
+        onRestore,
         onToggleStar,
         toggleSelectId: (id) => setSelectedIds(p => p.includes(id) ? p.filter(i => i !== id) : [...p, id]),
         selectAll: () => setSelectedIds(selectedIds.length === filteredMessages.length ? [] : filteredMessages.map(m => m.id)),

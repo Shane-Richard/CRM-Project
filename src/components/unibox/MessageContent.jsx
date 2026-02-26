@@ -18,7 +18,8 @@ import {
   Mail,
   User,
   Clock,
-  MoreVertical
+  MoreVertical,
+  Undo2
 } from 'lucide-react';
 import StatusDropdown from './StatusDropdown';
 
@@ -244,7 +245,7 @@ const ComposeReply = memo(({ onClose, replyTo, subject, mode = 'reply' }) => {
     );
 });
 
-const MessageContent = memo(({ activeMessage, selectedIds = [], onUpdateStatus, onArchive, onDelete, onToggleStar }) => {
+const MessageContent = memo(({ activeMessage, selectedIds = [], onUpdateStatus, onArchive, onDelete, onRestore, onToggleStar, activeFilter }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [replyMode, setReplyMode] = useState(null); // 'reply' | 'forward' | null
 
@@ -311,6 +312,20 @@ const MessageContent = memo(({ activeMessage, selectedIds = [], onUpdateStatus, 
                             <Star className={`w-4 h-4 ${isStarred ? 'fill-current' : ''}`} />
                         </button>
                     </div>
+
+                    {/* Restore button — only visible in Trash */}
+                    {activeFilter === 'trash' && (
+                        <div className="flex bg-emerald-50 p-1 rounded-2xl mr-2 border border-emerald-100">
+                            <button
+                                onClick={() => onRestore(selectedIds.length > 0 ? selectedIds : [activeMessage.id])}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all"
+                                title="Restore to Inbox"
+                            >
+                                <Undo2 className="w-3.5 h-3.5" />
+                                Restore
+                            </button>
+                        </div>
+                    )}
 
                     <div className="flex bg-slate-100 p-1 rounded-2xl">
                         <button 

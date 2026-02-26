@@ -32,6 +32,7 @@ const Unibox = () => {
     onUpdateStatus,
     onArchive,
     onDelete,
+    onRestore,
     onToggleStar,
     triggerSync,
     pagination
@@ -83,7 +84,9 @@ const Unibox = () => {
           onUpdateStatus={onUpdateStatus}
           onArchive={onArchive}
           onDelete={onDelete}
+          onRestore={onRestore}
           onToggleStar={onToggleStar}
+          activeFilter={activeFilter}
         />
         
         {/* Global Loading Overlay for syncing if needed */}
