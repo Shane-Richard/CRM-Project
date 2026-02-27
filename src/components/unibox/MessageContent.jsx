@@ -19,9 +19,12 @@ import {
   User,
   Clock,
   MoreVertical,
-  Undo2
+  Undo2,
+  Loader2
 } from 'lucide-react';
 import StatusDropdown from './StatusDropdown';
+import { useToast } from '../../hooks/useToast.jsx';
+import { mailService } from '../../services/MailService';
 
 // Format file size helper
 const formatFileSize = (bytes) => {
@@ -165,8 +168,11 @@ const AttachmentItem = memo(({ attachment }) => {
     );
 });
 
-const ComposeReply = memo(({ onClose, replyTo, subject, mode = 'reply' }) => {
+const ComposeReply = memo(({ onClose, replyTo, subject, mode = 'reply', threadId, gmailMessageId }) => {
+    const { showToast } = useToast();
     const [body, setBody] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const [sendError, setSendError] = useState(null);
     const textareaRef = useRef(null);
 
     useEffect(() => {
@@ -175,11 +181,34 @@ const ComposeReply = memo(({ onClose, replyTo, subject, mode = 'reply' }) => {
         }
     }, []);
 
-    const handleSend = () => {
-        if (!body.trim()) return;
-        console.log(`[${mode.toUpperCase()}] Sending...`);
-        setBody('');
-        onClose();
+    const handleSend = async () => {
+        if (!body.trim() || isSending) return;
+        setSendError(null);
+        setIsSending(true);
+
+        try {
+            const result = await mailService.sendReply({
+                to: replyTo,
+                subject,
+                body,
+                threadId,
+                inReplyToMessageId: gmailMessageId,
+            });
+
+            if (result.success) {
+                showToast({ message: `✅ ${mode === 'reply' ? 'Reply' : 'Forward'} sent!`, type: 'success' });
+                setBody('');
+                onClose();
+            } else {
+                throw new Error(result.error || 'Send failed');
+            }
+        } catch (err) {
+            const msg = err.message || 'Failed to send';
+            setSendError(msg);
+            showToast({ message: `❌ ${msg}`, type: 'error' });
+        } finally {
+            setIsSending(false);
+        }
     };
 
     return (
@@ -218,27 +247,38 @@ const ComposeReply = memo(({ onClose, replyTo, subject, mode = 'reply' }) => {
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     placeholder={mode === 'reply' ? 'Type your reply here...' : 'Add context for this forward...'}
-                    className="w-full px-6 py-5 text-[14px] font-medium text-slate-800 resize-none focus:outline-none min-h-[220px] bg-transparent placeholder:text-slate-300"
+                    className="w-full px-6 py-5 text-[14px] font-medium text-slate-800 resize-none focus:outline-none min-h-[180px] bg-transparent placeholder:text-slate-300"
                 />
             </div>
+
+            {/* Error */}
+            {sendError && (
+                <div className="mx-5 mb-2 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-[11px] font-semibold text-red-600">{sendError}</p>
+                </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-white">
                 <div className="flex items-center gap-2">
                     <button className="p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-all active:scale-95">
-                        <Paperclip className="w-4.5 h-4.5" />
+                        <Paperclip className="w-4 h-4" />
                     </button>
                     <button className="p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-all active:scale-95">
-                        <Image className="w-4.5 h-4.5" />
+                        <Image className="w-4 h-4" />
                     </button>
                 </div>
                 <button
                     onClick={handleSend}
-                    disabled={!body.trim()}
+                    disabled={!body.trim() || isSending}
                     className="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white text-[13px] font-black uppercase tracking-widest rounded-2xl hover:bg-black transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-xl shadow-slate-900/10 hover:shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
                 >
-                    <Send className="w-4 h-4 text-primary" />
-                    Send Message
+                    {isSending ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    ) : (
+                        <Send className="w-4 h-4 text-primary" />
+                    )}
+                    {isSending ? 'Sending...' : 'Send Message'}
                 </button>
             </div>
         </div>
@@ -461,6 +501,8 @@ const MessageContent = memo(({ activeMessage, selectedIds = [], onUpdateStatus, 
                             mode={replyMode}
                             replyTo={sender_email || sender || ''}
                             subject={subject || ''}
+                            threadId={activeMessage.thread_id}
+                            gmailMessageId={activeMessage.gmail_message_id}
                             onClose={() => setReplyMode(null)}
                         />
                     </div>

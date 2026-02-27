@@ -373,6 +373,119 @@ class MailService {
     }
 
     /**
+     * Send a new email thread via Gmail API
+     * @param {Object} opts - { to: string[], cc: string[], subject: string, body: string }
+     */
+    async sendEmail({ to, cc = [], subject, body }) {
+        const token = gmailSyncEngine.getAccessToken();
+        if (!token) {
+            console.warn('[MailService] No access token — cannot send email');
+            return { success: false, error: 'No Gmail session. Please reconnect your account.' };
+        }
+
+        try {
+            // Build RFC-2822 raw message
+            const toLine    = `To: ${to.join(', ')}`;
+            const ccLine    = cc.length ? `Cc: ${cc.join(', ')}` : '';
+            const subjectLine = `Subject: ${subject}`;
+            const mimeLines = [
+                toLine,
+                ccLine,
+                subjectLine,
+                'MIME-Version: 1.0',
+                'Content-Type: text/html; charset=UTF-8',
+                '',
+                body.replace(/\n/g, '<br/>')
+            ].filter(Boolean).join('\r\n');
+
+            const raw = btoa(unescape(encodeURIComponent(mimeLines)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+            const res = await fetch(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ raw }),
+                }
+            );
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error?.message || `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            console.log('[MailService] ✅ Email sent:', data.id);
+            return { success: true, messageId: data.id };
+        } catch (err) {
+            console.error('[MailService] sendEmail failed:', err.message);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
+     * Send a reply/forward inside an existing Gmail thread
+     * @param {Object} opts - { to, cc, subject, body, threadId, inReplyToMessageId }
+     */
+    async sendReply({ to, cc = [], subject, body, threadId, inReplyToMessageId }) {
+        const token = gmailSyncEngine.getAccessToken();
+        if (!token) {
+            return { success: false, error: 'No Gmail session. Please reconnect your account.' };
+        }
+
+        try {
+            const toLine    = `To: ${Array.isArray(to) ? to.join(', ') : to}`;
+            const ccLine    = cc.length ? `Cc: ${cc.join(', ')}` : '';
+            const subjectLine = `Subject: ${subject.startsWith('Re:') ? subject : `Re: ${subject}`}`;
+            const replyToHeader = inReplyToMessageId ? `In-Reply-To: ${inReplyToMessageId}` : '';
+            const referencesHeader = inReplyToMessageId ? `References: ${inReplyToMessageId}` : '';
+
+            const mimeLines = [
+                toLine,
+                ccLine,
+                subjectLine,
+                replyToHeader,
+                referencesHeader,
+                'MIME-Version: 1.0',
+                'Content-Type: text/html; charset=UTF-8',
+                '',
+                body.replace(/\n/g, '<br/>')
+            ].filter(Boolean).join('\r\n');
+
+            const raw = btoa(unescape(encodeURIComponent(mimeLines)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+            const res = await fetch(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ raw, threadId }),
+                }
+            );
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error?.message || `HTTP ${res.status}`);
+            }
+
+            const data = await res.json();
+            console.log('[MailService] ✅ Reply sent in thread:', threadId, '→', data.id);
+            return { success: true, messageId: data.id };
+        } catch (err) {
+            console.error('[MailService] sendReply failed:', err.message);
+            return { success: false, error: err.message };
+        }
+    }
+
+    /**
      * Unified Data Mapper
      */
     mapToAppAccount(raw) {

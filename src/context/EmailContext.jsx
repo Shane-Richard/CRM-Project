@@ -435,6 +435,7 @@ export const EmailProvider = ({ children }) => {
 
     const value = {
         messages: filteredMessages,
+        allMessages: messagesState,  // raw unfiltered — for Sidebar badge etc.
         isSyncing,
         isFetchingAll,  // background full-sync in progress
         totalEmails: messagesState.length, // real accumulated count
