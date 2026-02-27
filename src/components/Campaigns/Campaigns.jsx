@@ -10,6 +10,7 @@ import CampaignDetail from './CampaignDetail';
 import CreateCampaignModal from './CreateCampaignModal';
 
 // Aggregate stat card (top bar)
+// eslint-disable-next-line no-unused-vars
 const TopStat = ({ icon: Icon, label, value, accent = false }) => (
     <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl border flex-1 min-w-[130px] ${
         accent ? 'bg-primary/5 border-primary/20' : 'bg-white border-slate-100'

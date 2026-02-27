@@ -119,6 +119,7 @@ const EmptyState = ({ query }) => (
 );
 
 // ── Stat chip ──────────────────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
 const StatChip = ({ icon: Icon, label, value, color = 'slate' }) => {
     const colors = {
         slate:  'bg-slate-50 border-slate-100 text-slate-600',

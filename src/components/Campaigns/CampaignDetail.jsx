@@ -75,6 +75,7 @@ const SequenceStep = ({ step, isLast }) => (
     </div>
 );
 
+// eslint-disable-next-line no-unused-vars
 const MetricCard = ({ icon: Icon, label, value, sub, color = 'slate', ring, ringColor }) => {
     const colors = {
         slate:   { bg: 'bg-slate-50',   border: 'border-slate-100',  text: 'text-slate-600' },
