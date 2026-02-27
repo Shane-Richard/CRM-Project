@@ -6,14 +6,6 @@ import {
   Inbox, 
   BarChart2, 
   Settings, 
-  Send,
-  FileText,
-  Zap,
-  Monitor,
-  MessageSquare,
-  Rocket,
-  User,
-  Bug,
   Hexagon,
   Users2
 } from 'lucide-react';
@@ -39,19 +31,11 @@ const Sidebar = ({ activeItem, navigate, unreadCount = 0 }) => {
     { name: 'Inboxes', icon: Inbox, badge: unreadCount },
     { name: 'Search', icon: Search },
     { name: 'Campaigns', icon: Megaphone },
-    { name: 'Sending', icon: Send },
-    { name: 'Templates', icon: FileText },
     { name: 'Analytics', icon: BarChart2 },
-    { name: 'Accelerator', icon: Zap },
-    { name: 'Debug', icon: Bug },
-    { name: 'Inbox Placement', icon: Monitor },
-    { name: 'Settings', icon: Settings },
   ];
 
   const bottomItems = [
-    { name: 'Chat', icon: MessageSquare },
-    { name: 'Growth', icon: Rocket },
-    { name: 'Profile', icon: User },
+    { name: 'Settings', icon: Settings },
   ];
 
   return (
@@ -105,16 +89,31 @@ const Sidebar = ({ activeItem, navigate, unreadCount = 0 }) => {
 
         {/* Bottom Items */}
         <div className="mt-auto pt-6 pb-2 w-full px-3 space-y-4 flex flex-col items-center border-t border-white/5">
-          {bottomItems.map((item) => (
-            <button
-              key={item.name}
-              onMouseEnter={(e) => handleMouseEnter(e, item.name)}
-              onMouseLeave={handleMouseLeave}
-              className="w-10 h-10 flex items-center justify-center rounded-2xl text-slate-500 hover:text-white hover:bg-white/5 transition-all group relative"
-            >
-              <item.icon className="w-[18px] h-[18px] group-hover:scale-110 transition-transform" />
-            </button>
-          ))}
+          {bottomItems.map((item) => {
+            const isActive = activeItem === item.name;
+            return (
+              <button
+                key={item.name}
+                onClick={() => navigate(item.name)}
+                onMouseEnter={(e) => handleMouseEnter(e, item.name)}
+                onMouseLeave={handleMouseLeave}
+                className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 group relative ${
+                  isActive
+                    ? 'bg-primary text-black shadow-[0_0_20px_rgba(178,244,14,0.3)] scale-105'
+                    : 'text-slate-500 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <item.icon
+                  className={`w-[18px] h-[18px] transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+                
+                {isActive && (
+                  <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-primary rounded-r-full shadow-[4px_0_12px_rgba(178,244,14,0.6)]" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </aside>
 

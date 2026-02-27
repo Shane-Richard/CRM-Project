@@ -10,6 +10,8 @@ import { UIProvider } from './hooks/useUI.jsx';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './hooks/useToast.jsx';
 import CommandPalette from './components/Search/CommandPalette';
+import useAuth from './hooks/useAuth';
+import Login from './components/Auth/Login';
 
 // Lazy-load Heavy Pages
 const Dashboard  = lazy(() => import('./components/Dashboard/Dashboard'));
@@ -150,6 +152,23 @@ const NavigationContent = () => {
 };
 
 function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest italic animate-pulse">Initializing CRM Core...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <NavigationProvider>
       <ToastProvider>
