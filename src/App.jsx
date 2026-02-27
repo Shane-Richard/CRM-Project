@@ -9,10 +9,12 @@ import { EmailProvider } from './context/EmailContext';
 import { UIProvider } from './hooks/useUI.jsx';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './hooks/useToast.jsx';
+import CommandPalette from './components/Search/CommandPalette';
 
-// Lazy-load Heavy Pages for performance
+// Lazy-load Heavy Pages
 const Dashboard  = lazy(() => import('./components/Dashboard/Dashboard'));
 const LeadFinder = lazy(() => import('./components/LeadFinder/LeadFinder'));
+const SearchPage = lazy(() => import('./components/Search/SearchPage'));
 
 // ── Full-page spinner for Suspense fallback
 const PageLoader = () => (
@@ -42,6 +44,23 @@ const ComingSoon = ({ module }) => (
         </div>
     </div>
 );
+
+// ── Global Ctrl+K Command Palette mount
+const GlobalCommandPalette = () => {
+    const [open, setOpen] = useState(false);
+    useEffect(() => {
+        const handler = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                setOpen(v => !v);
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, []);
+    if (!open) return null;
+    return <CommandPalette onClose={() => setOpen(false)} />;
+};
 
 // ── Main router component
 const NavigationContent = () => {
@@ -87,6 +106,14 @@ const NavigationContent = () => {
                     <LeadFinder />
                 </Suspense>
             );
+
+        case 'Search':
+            return (
+                <Suspense fallback={<PageLoader />}>
+                    <SearchPage />
+                </Suspense>
+            );
+
         case 'Campaigns':
         case 'Analytics':
         case 'Settings':
@@ -112,6 +139,8 @@ function App() {
                 <MainLayout>
                   <NavigationContent />
                 </MainLayout>
+                {/* Global Ctrl+K Command Palette — always mounted */}
+                <GlobalCommandPalette />
               </EmailProvider>
             </AccountsProvider>
           </UIProvider>
