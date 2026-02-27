@@ -16,6 +16,8 @@ const Dashboard  = lazy(() => import('./components/Dashboard/Dashboard'));
 const LeadFinder = lazy(() => import('./components/LeadFinder/LeadFinder'));
 const SearchPage = lazy(() => import('./components/Search/SearchPage'));
 const Campaigns  = lazy(() => import('./components/Campaigns/Campaigns'));
+const Analytics  = lazy(() => import('./components/Analytics/Analytics'));
+const Settings   = lazy(() => import('./components/Settings/Settings'));
 
 // ── Full-page spinner for Suspense fallback
 const PageLoader = () => (
@@ -123,7 +125,19 @@ const NavigationContent = () => {
             );
 
         case 'Analytics':
+            return (
+                <Suspense fallback={<PageLoader />}>
+                    <Analytics />
+                </Suspense>
+            );
+
         case 'Settings':
+            return (
+                <Suspense fallback={<PageLoader />}>
+                    <Settings />
+                </Suspense>
+            );
+
         case 'Sending':
         case 'Templates':
         case 'Accelerator':

@@ -31,13 +31,6 @@ const RingChart = ({ value, color = '#b2f40e', size = 44, stroke = 4 }) => {
     );
 };
 
-const StatPill = ({ label, value }) => (
-    <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-2xl min-w-[72px]">
-        <Icon className="w-3.5 h-3.5 text-slate-400 mb-1" />
-        <span className="text-[15px] font-black text-slate-900">{value}</span>
-        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
-    </div>
-);
 
 // Mini sparkline from daily data
 const Sparkline = ({ data, color = '#b2f40e', h = 28, w = 80 }) => {
@@ -148,4 +141,4 @@ const CampaignCard = ({ campaign, isSelected, onClick, onStatusChange, onDelete 
     );
 };
 
-export { CampaignCard, STATUS_CONFIG, RingChart, StatPill, Sparkline };
+export { CampaignCard, STATUS_CONFIG, RingChart, Sparkline };
