@@ -62,10 +62,10 @@ export const EmailProvider = ({ children }) => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // --- Pagination Data ---
-    const [itemsPerPage] = useState(25);
-    const [totalItems, setTotalItems] = useState(0);
+    const [itemsPerPage] = useState(100); // Gmail API max per request
     const [nextPageToken, setNextPageToken] = useState(null);
     const [pageTokenStacks, setPageTokenStacks] = useState({});
+    const [isFetchingAll, setIsFetchingAll] = useState(false); // Background full-sync indicator
 
     // --- Caching System (Memory) ---
     const cacheRef = useRef({}); // Key: "email_filter_tab_page" -> { messages, nextPageToken, total }
@@ -111,7 +111,6 @@ export const EmailProvider = ({ children }) => {
             const cached = cacheRef.current[cacheKey];
             setMessagesState(cached.messages);
             setNextPageToken(cached.nextPageToken);
-            setTotalItems(cached.total);
             return;
         }
 
@@ -142,7 +141,6 @@ export const EmailProvider = ({ children }) => {
 
                 setMessagesState(threadsWithOrg);
                 setNextPageToken(result.nextPageToken);
-                setTotalItems(result.resultSizeEstimate || result.threads.length);
                 setLastSyncTime(new Date());
 
                 // Update token stack for this view
@@ -167,6 +165,8 @@ export const EmailProvider = ({ children }) => {
                 if (isInitial && page === 1) {
                     showToast({ message: "Inbox synchronized", type: 'success' });
                 }
+                // Return nextPageToken so syncAllPages can start from page 2
+                return result.nextPageToken || null;
             }
         } catch (err) {
             console.error("[EmailContext] Sync Error:", err);
@@ -176,6 +176,62 @@ export const EmailProvider = ({ children }) => {
             setIsSyncing(false);
         }
     }, [activeAccount, activeOrg, currentPage, activeTab, activeFilter, itemsPerPage, pageTokenStacks, getCacheKey, showToast]);
+
+    // --- Background: Auto-fetch ALL pages and accumulate ---
+    const syncAllPages = useCallback(async (startToken = null) => {
+        if (!activeAccount || isFetchingAll) return;
+        setIsFetchingAll(true);
+        console.log('[EmailContext] Starting full background sync...');
+
+        let token = startToken; // start from where triggerSync left off
+        let page = 0;
+        let total = 0;
+
+        try {
+            do {
+                const result = await apiService.messages.syncGmail(
+                    activeAccount.email,
+                    100,
+                    token,
+                    'primary'
+                );
+
+                if (!result.success || !result.threads?.length) break;
+
+                const threadsWithOrg = result.threads.map(t => ({ ...t, org_id: activeOrg?.id }));
+
+                // Accumulate messages — don't replace
+                setMessagesState(prev => {
+                    const existingIds = new Set(prev.map(m => m.id));
+                    const newOnes = threadsWithOrg.filter(t => !existingIds.has(t.id));
+                    return [...prev, ...newOnes];
+                });
+
+                // Sync page to Supabase
+                if (result.source && !result.source.includes('Demo')) {
+                    await gmailSyncEngine.syncToSupabase(threadsWithOrg, activeOrg?.id);
+                }
+
+                total += result.threads.length;
+                token = result.nextPageToken || null;
+                page++;
+
+                console.log(`[EmailContext] Page ${page} synced — ${total} total so far`);
+
+                // Safety: stop after 10 pages (1000 emails max) to avoid rate limits
+                if (page >= 10) break;
+
+            } while (token);
+
+            setLastSyncTime(new Date());
+            console.log(`[EmailContext] ✅ Full sync complete — ${total} additional emails loaded`);
+            if (total > 0) showToast({ message: `✅ ${total} emails fully synced`, type: 'success' });
+        } catch (err) {
+            console.error('[EmailContext] Full sync error:', err.message);
+        } finally {
+            setIsFetchingAll(false);
+        }
+    }, [activeAccount, activeOrg, isFetchingAll, showToast]);
 
     // --- UI/UX Handlers ---
     const handleTabChange = useCallback((newTab) => {
@@ -191,7 +247,12 @@ export const EmailProvider = ({ children }) => {
         setActiveFilter(newFilter);
         setCurrentPage(1);
         updateUrlParams({ filter: newFilter, page: 1 });
-        triggerSync({ page: 1, filter: newFilter });
+        // Only trigger Gmail fetch for filters that need fresh data (inbox, unread)
+        // Status filters (lead, interested, etc.), archived, and trash work on local state
+        const needsGmailFetch = (newFilter === 'inbox' || newFilter === 'all' || newFilter === 'unread');
+        if (needsGmailFetch) {
+            triggerSync({ page: 1, filter: newFilter });
+        }
     }, [activeFilter, updateUrlParams, triggerSync]);
 
     const handleNextPage = useCallback(() => {
@@ -212,8 +273,15 @@ export const EmailProvider = ({ children }) => {
 
     // --- Data Integrity & Persistence ---
     useEffect(() => {
-        if (activeAccount) triggerSync({ isInitial: true });
-    }, [activeAccount, triggerSync]);
+        if (activeAccount) {
+            // Step 1: Fetch first page immediately
+            triggerSync({ isInitial: true }).then((firstPageToken) => {
+                // Step 2: Auto-fetch ALL remaining pages starting from where page 1 left off
+                syncAllPages(firstPageToken);
+            });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeAccount]);
 
     useEffect(() => {
         const handlePopState = () => {
@@ -228,14 +296,20 @@ export const EmailProvider = ({ children }) => {
     }, [currentPage, activeTab, activeFilter, triggerSync]);
 
     // --- Message Actions ---
-    const onUpdateStatus = useCallback(async (id, status) => {
+    const onUpdateStatus = useCallback(async (id, statusIdOrLabel) => {
         const previous = [...messagesState];
-        setMessagesState(prev => prev.map(m => m.id === id ? { ...m, status } : m));
+        // Resolve to label for consistent storage (e.g. "meeting_booked" -> "Meeting booked")
+        const statusConfig = LABEL_CONFIG.find(
+            l => l.id === statusIdOrLabel || l.label.toLowerCase() === statusIdOrLabel.toLowerCase()
+        );
+        const resolvedLabel = statusConfig?.label || statusIdOrLabel;
+
+        setMessagesState(prev => prev.map(m => m.id === id ? { ...m, status: resolvedLabel } : m));
         // Clear cache on mutation
         cacheRef.current = {};
         try {
-            await apiService.messages.updateStatus(id, status);
-            showToast({ message: `Status updated to ${status}` });
+            await apiService.messages.updateStatus(id, resolvedLabel);
+            showToast({ message: `Status updated to ${resolvedLabel}` });
         } catch {
             setMessagesState(previous);
             showToast({ message: "Failed to update status", type: 'error' });
@@ -281,7 +355,7 @@ export const EmailProvider = ({ children }) => {
         setMessagesState(prev =>
             prev.map(m =>
                 ids.includes(m.id)
-                    ? { ...m, isDeleted: false, folder_id: 'primary' }
+                    ? { ...m, isDeleted: false }
                     : m
             )
         );
@@ -290,7 +364,7 @@ export const EmailProvider = ({ children }) => {
         // Clear cache
         cacheRef.current = {};
         try {
-            await apiService.messages.updateFlags(ids, { is_deleted: false, folder_id: 'primary' });
+            await apiService.messages.updateFlags(ids, { is_deleted: false });
             showToast({ message: `Email restored to Inbox`, type: 'success' });
         } catch {
             setMessagesState(previous);
@@ -320,7 +394,10 @@ export const EmailProvider = ({ children }) => {
         if (activeFilter !== 'all' && !isArchiveView && !isTrashView) {
             if (activeFilter === 'unread') filtered = filtered.filter(msg => !msg.read);
             else if (LABEL_CONFIG.some(l => l.id === activeFilter)) {
-                filtered = filtered.filter(msg => msg.status?.toLowerCase() === activeFilter.toLowerCase());
+                // Normalize both sides: "Meeting booked" -> "meeting_booked" vs activeFilter "meeting_booked"
+                filtered = filtered.filter(msg =>
+                    (msg.status || '').toLowerCase().replace(/\s+/g, '_') === activeFilter.toLowerCase()
+                );
             }
         }
 
@@ -334,7 +411,10 @@ export const EmailProvider = ({ children }) => {
     const statusCounts = useMemo(() => {
         const counts = {};
         LABEL_CONFIG.forEach(l => {
-            counts[l.id] = messagesState.filter(m => m.status?.toLowerCase() === l.id && !m.isDeleted && !m.isArchived).length;
+            counts[l.id] = messagesState.filter(m =>
+                (m.status || '').toLowerCase().replace(/\s+/g, '_') === l.id
+                && !m.isDeleted && !m.isArchived
+            ).length;
         });
         counts['all'] = messagesState.filter(m => !m.isDeleted && !m.isArchived).length;
         counts['unread'] = messagesState.filter(m => !m.read && !m.isDeleted && !m.isArchived).length;
@@ -342,6 +422,7 @@ export const EmailProvider = ({ children }) => {
         counts['trash'] = messagesState.filter(m => m.isDeleted).length;
         return counts;
     }, [messagesState]);
+
 
     const lastSyncLabel = useMemo(() => {
         if (!lastSyncTime) return null;
@@ -355,7 +436,11 @@ export const EmailProvider = ({ children }) => {
     const value = {
         messages: filteredMessages,
         isSyncing,
-        syncProgress: `Syncing ${activeTab}...`,
+        isFetchingAll,  // background full-sync in progress
+        totalEmails: messagesState.length, // real accumulated count
+        syncProgress: isFetchingAll
+            ? `Syncing... (${messagesState.length} loaded)`
+            : `Syncing ${activeTab}...`,
         lastSyncTime,
         lastSyncLabel,
         error,
@@ -377,7 +462,7 @@ export const EmailProvider = ({ children }) => {
         onToggleStar,
         toggleSelectId: (id) => setSelectedIds(p => p.includes(id) ? p.filter(i => i !== id) : [...p, id]),
         selectAll: () => setSelectedIds(selectedIds.length === filteredMessages.length ? [] : filteredMessages.map(m => m.id)),
-        triggerSync: () => triggerSync({ forceRefresh: true }),
+        triggerSync: () => { cacheRef.current = {}; triggerSync({ forceRefresh: true }).then(() => syncAllPages()); },
         filters: LABEL_CONFIG,
         campaigns: CAMPAIGNS,
         inboxes: accounts,
@@ -385,7 +470,7 @@ export const EmailProvider = ({ children }) => {
         pagination: { 
             currentPage, 
             itemsPerPage, 
-            totalItems,
+            totalItems: messagesState.length,
             hasNext: !!nextPageToken,
             hasPrev: currentPage > 1,
             onNext: handleNextPage,

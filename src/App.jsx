@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import MainLayout from './layout/MainLayout';
 import { NavigationProvider, useNavigation } from './hooks/useNavigation';
 import InboxPlacement from './components/InboxPlacement';
@@ -10,23 +10,51 @@ import { UIProvider } from './hooks/useUI.jsx';
 import { OrganizationProvider } from './hooks/useOrganization.jsx';
 import { ToastProvider } from './hooks/useToast.jsx';
 
-const NavigationContent = () => {
-    const { activeItem } = useNavigation();
-    const [tests, setTests] = useState([]); // Start with empty to show empty state initially
+// Lazy-load Heavy Pages for performance
+const Dashboard  = lazy(() => import('./components/Dashboard/Dashboard'));
+const LeadFinder = lazy(() => import('./components/LeadFinder/LeadFinder'));
 
-    // Simulate fetching data or toggle for demo purposes
-    // In a real app, this would be a useEffect calling an API
+// ── Full-page spinner for Suspense fallback
+const PageLoader = () => (
+    <div className="flex h-full w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            <p className="text-sm text-gray-400 font-medium">Loading...</p>
+        </div>
+    </div>
+);
+
+// ── Coming Soon placeholder for unbuilt modules
+const ComingSoon = ({ module }) => (
+    <div className="flex h-full w-full items-center justify-center">
+        <div className="text-center max-w-sm">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-3xl bg-primary/10 flex items-center justify-center">
+                <span className="text-4xl">🚧</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">{module}</h2>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                This module is part of the master plan and is being built next.<br />
+                Check back soon!
+            </p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                ⚡ Planned — Master Plan Phase Active
+            </div>
+        </div>
+    </div>
+);
+
+// ── Main router component
+const NavigationContent = () => {
+    const { activeItem, navigate } = useNavigation();
+    const [tests, setTests] = useState([]);
+
     useEffect(() => {
         if (activeItem === 'Inbox Placement') {
-             // Simulate an API call delay for demo purposes
-             const timer = setTimeout(() => {
-                 setTests(inboxTests);
-             }, 500);
-             return () => clearTimeout(timer);
+            const timer = setTimeout(() => setTests(inboxTests), 500);
+            return () => clearTimeout(timer);
         }
     }, [activeItem]);
 
-    // Function to add a test manually for demo
     const handleAddTest = () => {
         const newTest = {
             id: tests.length + 1,
@@ -38,29 +66,39 @@ const NavigationContent = () => {
         setTests([newTest, ...tests]);
     };
 
-    if (activeItem === 'Inbox Placement') {
-        return <InboxPlacement tests={tests} onAddTest={handleAddTest} />;
-    }
+    // ── Route map
+    switch (activeItem) {
+        case 'Dashboard':
+            return (
+                <Suspense fallback={<PageLoader />}>
+                    <Dashboard navigate={navigate} />
+                </Suspense>
+            );
 
-    if (activeItem === 'Inboxes') {
-        return <Unibox />;
-    }
+        case 'Inboxes':
+            return <Unibox />;
 
-    return (
-        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 max-w-2xl mx-auto mt-10">
-            <h2 className="text-3xl font-bold mb-4 text-gray-800">Welcome to {activeItem}</h2>
-            <p className="text-gray-600 mb-6 text-lg">
-                This is the placeholder for the {activeItem} view.
-            </p>
-            <div className="p-4 bg-surface rounded-lg border border-gray-200">
-                <p className="text-sm text-gray-500 font-mono">
-                    System Version 1.0.0
-                    <br />
-                    Environment: Production Ready
-                </p>
-            </div>
-        </div>
-    );
+        case 'Inbox Placement':
+            return <InboxPlacement tests={tests} onAddTest={handleAddTest} />;
+
+        case 'Lead Finder':
+            return (
+                <Suspense fallback={<PageLoader />}>
+                    <LeadFinder />
+                </Suspense>
+            );
+        case 'Campaigns':
+        case 'Analytics':
+        case 'Settings':
+        case 'Sending':
+        case 'Templates':
+        case 'Accelerator':
+        case 'Debug':
+            return <ComingSoon module={activeItem} />;
+
+        default:
+            return <ComingSoon module={activeItem} />;
+    }
 };
 
 function App() {

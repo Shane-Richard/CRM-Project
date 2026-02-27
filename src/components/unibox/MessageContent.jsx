@@ -301,7 +301,7 @@ const MessageContent = memo(({ activeMessage, selectedIds = [], onUpdateStatus, 
                             <Trash2 className="w-4 h-4" />
                         </button>
                         <button 
-                            onClick={() => onToggleStar(selectedIds.length > 0 ? selectedIds : [activeMessage.id])}
+                            onClick={() => onToggleStar(activeMessage.id, !isStarred)}
                             className={`p-2.5 rounded-xl transition-all hover:shadow-sm ${
                                 isStarred 
                                     ? 'bg-white text-amber-500' 

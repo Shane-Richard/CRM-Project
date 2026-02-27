@@ -16,7 +16,8 @@ import {
   Rocket,
   User,
   Bug,
-  Hexagon
+  Hexagon,
+  Users2
 } from 'lucide-react';
 
 const Sidebar = ({ activeItem, navigate }) => {
@@ -35,7 +36,8 @@ const Sidebar = ({ activeItem, navigate }) => {
   };
 
   const menuItems = [
-    { name: 'Lead Finder', icon: LayoutDashboard },
+    { name: 'Dashboard', icon: LayoutDashboard },
+    { name: 'Lead Finder', icon: Users2 },
     { name: 'Inboxes', icon: Inbox },
     { name: 'Search', icon: Search },
     { name: 'Campaigns', icon: Megaphone },
