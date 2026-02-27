@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Play, Pause, Trash2, Mail, Users, TrendingUp,
     MessageSquare, Target, Zap, Clock, BarChart2,
-    CheckCircle, FileEdit, ArrowUpRight, ChevronDown
+    CheckCircle, FileEdit, Search, ChevronRight,
+    MapPin, Globe, Layout, List
 } from 'lucide-react';
 import { STATUS_CONFIG, RingChart } from './CampaignCard';
+import { useLeads } from '../../hooks/useLeads';
 
 // Bar chart for daily sends
 const DailyBarChart = ({ data = [] }) => {
@@ -77,7 +79,7 @@ const MetricCard = ({ icon: Icon, label, value, sub, color = 'slate', ring, ring
     const colors = {
         slate:   { bg: 'bg-slate-50',   border: 'border-slate-100',  text: 'text-slate-600' },
         green:   { bg: 'bg-emerald-50', border: 'border-emerald-100',text: 'text-emerald-700' },
-        blue:    { bg: 'bg-blue-50',    border: 'border-blue-100',   text: 'text-blue-700' },
+        blue:    { bg: 'bg-blue-50',    border: 'border-blue-100',    text: 'text-blue-700' },
         violet:  { bg: 'bg-violet-50',  border: 'border-violet-100', text: 'text-violet-700' },
         amber:   { bg: 'bg-amber-50',   border: 'border-amber-100',  text: 'text-amber-700' },
     };
@@ -104,6 +106,15 @@ const MetricCard = ({ icon: Icon, label, value, sub, color = 'slate', ring, ring
 };
 
 const CampaignDetail = ({ campaign, onStatusChange, onDelete }) => {
+    const [activeTab, setActiveTab] = useState('overview');
+    const { leads: allLeads, isLoading: leadsLoading } = useLeads();
+
+    // Mock filtering for campaign leads
+    const campaignLeads = useMemo(() => {
+        if (!campaign?.leadIds) return [];
+        return allLeads.filter(l => campaign.leadIds.includes(l.id));
+    }, [allLeads, campaign]);
+
     if (!campaign) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center px-8">
@@ -118,11 +129,17 @@ const CampaignDetail = ({ campaign, onStatusChange, onDelete }) => {
 
     const cfg = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
 
+    const tabs = [
+        { id: 'overview', label: 'Performance', icon: Layout },
+        { id: 'sequence', label: 'Sequence',    icon: List },
+        { id: 'leads',    label: 'Leads',       icon: Users, count: campaign.leads },
+    ];
+
     return (
-        <div className="flex flex-col h-full overflow-y-auto">
+        <div className="flex flex-col h-full overflow-hidden">
             {/* ── Header ── */}
-            <div className="flex-shrink-0 px-8 pt-8 pb-6 border-b border-slate-100 bg-white sticky top-0 z-10">
-                <div className="flex items-start justify-between mb-4">
+            <div className="flex-shrink-0 px-8 pt-8 pb-0 border-b border-slate-100 bg-white sticky top-0 z-10 transition-all">
+                <div className="flex items-start justify-between mb-6">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
@@ -146,7 +163,7 @@ const CampaignDetail = ({ campaign, onStatusChange, onDelete }) => {
                             >
                                 <Pause className="w-3.5 h-3.5" /> Pause
                             </button>
-                        ) : campaign.status === 'paused' || campaign.status === 'draft' ? (
+                        ) : (campaign.status === 'paused' || campaign.status === 'draft') ? (
                             <button
                                 onClick={() => onStatusChange(campaign.id, 'active')}
                                 className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-[11px] font-black hover:bg-emerald-100 transition-all"
@@ -162,57 +179,137 @@ const CampaignDetail = ({ campaign, onStatusChange, onDelete }) => {
                         </button>
                     </div>
                 </div>
+
+                {/* Tabs */}
+                <div className="flex gap-6">
+                    {tabs.map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setActiveTab(t.id)}
+                            className={`pb-4 text-[12px] font-black transition-all relative flex items-center gap-2 ${
+                                activeTab === t.id ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            <t.icon className={`w-3.5 h-3.5 ${activeTab === t.id ? 'text-primary' : ''}`} />
+                            {t.label}
+                            {t.count !== undefined && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md">{t.count}</span>}
+                            {activeTab === t.id && (
+                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-900 rounded-t-full shadow-[0_-2px_8px_rgba(0,0,0,0.1)]" />
+                            )}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* ── Body ── */}
-            <div className="flex-1 px-8 py-6 space-y-8">
+            {/* ── Content Area ── */}
+            <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8 custom-scrollbar">
 
-                {/* Metric Grid */}
-                <div>
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                        <Target className="w-3.5 h-3.5" /> Performance Overview
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <MetricCard icon={Users}        label="Total Leads"   value={campaign.leads}   color="slate" />
-                        <MetricCard icon={Mail}         label="Emails Sent"   value={campaign.sent}    color="blue" />
-                        <MetricCard icon={TrendingUp}   label="Open Rate"     value={`${campaign.openRate}%`}  ring={campaign.openRate}  ringColor="#b2f40e" color="green" />
-                        <MetricCard icon={MessageSquare}label="Reply Rate"    value={`${campaign.replyRate}%`} ring={campaign.replyRate} ringColor="#a855f7" color="violet" />
-                        <MetricCard icon={Zap}          label="Click Rate"    value={`${campaign.clickRate}%`}   color="amber" sub={`${campaign.opens} total opens`} />
-                        <MetricCard icon={CheckCircle}  label="Replies"       value={campaign.replies}            color="green" sub={`${campaign.bounced} bounced`} />
-                    </div>
-                </div>
-
-                {/* Daily Send Activity */}
-                {campaign.dailySends?.length > 0 && (
-                    <div>
-                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                            <BarChart2 className="w-3.5 h-3.5" /> Daily Send Activity
-                        </h3>
-                        <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                            <DailyBarChart data={campaign.dailySends} />
-                            <div className="flex justify-between mt-2">
-                                <span className="text-[10px] text-slate-400 font-medium">14 days ago</span>
-                                <span className="text-[10px] text-slate-400 font-medium">Today</span>
+                {/* Performance Tab */}
+                {activeTab === 'overview' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+                        <div>
+                            <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                                <Target className="w-3.5 h-3.5" /> Performance Overview
+                            </h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <MetricCard icon={Users}        label="Total Leads"   value={campaign.leads}   color="slate" />
+                                <MetricCard icon={Mail}         label="Emails Sent"   value={campaign.sent}    color="blue" />
+                                <MetricCard icon={TrendingUp}   label="Open Rate"     value={`${campaign.openRate}%`}  ring={campaign.openRate}  ringColor="#b2f40e" color="green" />
+                                <MetricCard icon={MessageSquare}label="Reply Rate"    value={`${campaign.replyRate}%`} ring={campaign.replyRate} ringColor="#a855f7" color="violet" />
+                                <MetricCard icon={Zap}          label="Click Rate"    value={`${campaign.clickRate}%`}   color="amber" sub={`${campaign.opens} total opens`} />
+                                <MetricCard icon={CheckCircle}  label="Replies"       value={campaign.replies}            color="green" sub={`${campaign.bounced} bounced`} />
                             </div>
+                        </div>
+
+                        {campaign.dailySends?.length > 0 && (
+                            <div>
+                                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                                    <BarChart2 className="w-3.5 h-3.5" /> Daily Send Activity
+                                </h3>
+                                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm">
+                                    <DailyBarChart data={campaign.dailySends} />
+                                    <div className="flex justify-between mt-2">
+                                        <span className="text-[10px] text-slate-400 font-medium">14 days ago</span>
+                                        <span className="text-[10px] text-slate-400 font-medium">Today</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Sequence Tab */}
+                {activeTab === 'sequence' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                            <Mail className="w-3.5 h-3.5" /> Email Sequence ({campaign.sequence?.length} steps)
+                        </h3>
+                        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+                            {campaign.sequence?.map((step, idx) => (
+                                <SequenceStep
+                                    key={step.id}
+                                    step={step}
+                                    isLast={idx === campaign.sequence.length - 1}
+                                />
+                            ))}
                         </div>
                     </div>
                 )}
 
-                {/* Email Sequence */}
-                <div>
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5" /> Email Sequence ({campaign.sequence?.length} steps)
-                    </h3>
-                    <div className="bg-white border border-slate-100 rounded-2xl p-5">
-                        {campaign.sequence?.map((step, idx) => (
-                            <SequenceStep
-                                key={step.id}
-                                step={step}
-                                isLast={idx === campaign.sequence.length - 1}
-                            />
-                        ))}
+                {/* Leads Tab */}
+                {activeTab === 'leads' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+                            <Users className="w-3.5 h-3.5" /> Targeted Prospects
+                        </h3>
+
+                        {leadsLoading ? (
+                            <div className="py-20 flex flex-col items-center">
+                                <div className="w-8 h-8 border-2 border-primary border-t-transparent animate-spin rounded-full mb-3" />
+                                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Hydrating leads...</p>
+                            </div>
+                        ) : campaignLeads.length === 0 ? (
+                            <div className="py-16 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl">
+                                <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                                <p className="text-[13px] font-black text-slate-500">No leads targeted yet</p>
+                                <p className="text-[11px] text-slate-400 font-medium">Add leads through the campaign editor.</p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-3">
+                                {campaignLeads.map(lead => (
+                                    <div key={lead.id} className="group flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-primary transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-primary font-black text-[12px] group-hover:bg-primary group-hover:text-black transition-colors">
+                                                {lead.name?.charAt(0) || lead.email?.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-[13px] font-black text-slate-900 leading-tight">{lead.name}</h4>
+                                                <div className="flex items-center gap-3 mt-0.5">
+                                                    <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                                                        <Globe className="w-3 h-3" /> {lead.company || 'Private'}
+                                                    </span>
+                                                    <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                                                        <MapPin className="w-3 h-3" /> {lead.location || 'Unknown'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider ${
+                                                lead.status === 'replied' ? 'bg-blue-100 text-blue-700' :
+                                                lead.status === 'unsubscribed' ? 'bg-red-100 text-red-700' :
+                                                'bg-slate-100 text-slate-500'
+                                            }`}>
+                                                {lead.status}
+                                            </span>
+                                            <ChevronRight className="w-4 h-4 text-slate-200 group-hover:text-slate-400 transition-colors" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

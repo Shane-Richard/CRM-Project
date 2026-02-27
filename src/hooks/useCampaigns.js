@@ -6,7 +6,8 @@ const MOCK_CAMPAIGNS = [
         id: 'c1',
         name: 'Q1 SaaS Outreach',
         status: 'active',
-        leads: 248,
+        leads: 4,
+        leadIds: ['l1', 'l2', 'l3', 'l4'], // Mocking some IDs
         sent: 186,
         opens: 112,
         replies: 34,
@@ -29,7 +30,8 @@ const MOCK_CAMPAIGNS = [
         id: 'c2',
         name: 'E-commerce Decision Makers',
         status: 'paused',
-        leads: 532,
+        leads: 2,
+        leadIds: ['l5', 'l6'],
         sent: 445,
         opens: 201,
         replies: 67,
@@ -51,7 +53,8 @@ const MOCK_CAMPAIGNS = [
         id: 'c3',
         name: 'Agency Partnership Drive',
         status: 'completed',
-        leads: 89,
+        leads: 1,
+        leadIds: ['l7'],
         sent: 89,
         opens: 71,
         replies: 28,
@@ -74,6 +77,7 @@ const MOCK_CAMPAIGNS = [
         name: 'Product Launch Nurture',
         status: 'draft',
         leads: 0,
+        leadIds: [],
         sent: 0,
         opens: 0,
         replies: 0,
@@ -123,14 +127,14 @@ export const useCampaigns = () => {
     const stats = useMemo(() => ({
         total:       campaigns.length,
         active:      campaigns.filter(c => c.status === 'active').length,
-        totalLeads:  campaigns.reduce((s, c) => s + c.leads, 0),
-        totalSent:   campaigns.reduce((s, c) => s + c.sent, 0),
-        totalReplies:campaigns.reduce((s, c) => s + c.replies, 0),
+        totalLeads:  campaigns.reduce((s, c) => s + (c.leads || 0), 0),
+        totalSent:   campaigns.reduce((s, c) => s + (c.sent || 0), 0),
+        totalReplies:campaigns.reduce((s, c) => s + (c.replies || 0), 0),
         avgOpenRate: campaigns.length
-            ? Math.round(campaigns.reduce((s, c) => s + c.openRate, 0) / campaigns.length)
+            ? Math.round(campaigns.reduce((s, c) => s + (c.openRate || 0), 0) / campaigns.length)
             : 0,
         avgReplyRate: campaigns.length
-            ? Math.round(campaigns.reduce((s, c) => s + c.replyRate, 0) / campaigns.length)
+            ? Math.round(campaigns.reduce((s, c) => s + (c.replyRate || 0), 0) / campaigns.length)
             : 0,
     }), [campaigns]);
 
@@ -138,14 +142,27 @@ export const useCampaigns = () => {
     const createCampaign = useCallback((data) => {
         const newC = {
             id: `c${Date.now()}`,
+            name: data.name,
+            goal: data.goal,
+            tags: data.tags || [],
+            leadIds: data.leadIds || [],
+            leads: (data.leadIds || []).length,
+            senderName: data.senderName,
+            senderEmail: data.senderEmail,
             status: 'draft',
-            leads: 0, sent: 0, opens: 0, replies: 0, bounced: 0,
+            sent: 0, opens: 0, replies: 0, bounced: 0,
             openRate: 0, replyRate: 0, clickRate: 0, bounceRate: 0,
             createdAt: new Date().toISOString().split('T')[0],
             lastActivity: 'Just now',
             dailySends: [],
-            sequence: [{ id: `s${Date.now()}`, step: 1, type: 'email', subject: data.subjectLine || 'Step 1', delay: 0, sends: 0, opens: 0, replies: 0 }],
-            ...data,
+            sequence: (data.sequence || []).map((s, idx) => ({
+                id: `s${Date.now()}-${idx}`,
+                step: idx + 1,
+                type: 'email',
+                subject: s.subject,
+                delay: s.delay,
+                sends: 0, opens: 0, replies: 0
+            })),
         };
         setCampaigns(prev => [newC, ...prev]);
         setSelectedId(newC.id);

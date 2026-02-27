@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Megaphone, ChevronRight, Mail, Users, FileText, Tag, Plus, Trash2 } from 'lucide-react';
+import { X, Megaphone, ChevronRight, Mail, Users, FileText, Tag, Plus, Trash2, Search, Check, Filter } from 'lucide-react';
+import { useLeads } from '../../hooks/useLeads';
 
 const STEP_GOALS = [
     { id: 'cold_outreach',  label: 'Cold Outreach',     desc: 'Reach new prospects' },
@@ -28,11 +29,14 @@ const StepBadge = ({ step, current, label }) => {
 
 const CreateCampaignModal = ({ onClose, onCreate }) => {
     const [step, setStep] = useState(1);
+    const { leads, isLoading, updateFilter, filters } = useLeads();
+    
     const [form, setForm] = useState({
         name: '',
         goal: '',
         tags: [],
         tagInput: '',
+        selectedLeads: new Set(),
         subjectLine: '',
         senderName: '',
         senderEmail: '',
@@ -48,6 +52,21 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
             set('tags', [...form.tags, t]);
         }
         set('tagInput', '');
+    };
+
+    const toggleLead = (id) => {
+        const next = new Set(form.selectedLeads);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        set('selectedLeads', next);
+    };
+
+    const selectAllLeads = () => {
+        if (form.selectedLeads.size === leads.length) {
+            set('selectedLeads', new Set());
+        } else {
+            set('selectedLeads', new Set(leads.map(l => l.id)));
+        }
     };
 
     const addStep = () => {
@@ -71,6 +90,9 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
             if (!form.goal) e.goal = 'Select a goal';
         }
         if (step === 2) {
+            if (form.selectedLeads.size === 0) e.leads = 'Select at least one lead';
+        }
+        if (step === 3) {
             if (!form.senderName.trim()) e.senderName = 'Sender name required';
             if (!form.senderEmail.trim()) e.senderEmail = 'Sender email required';
         }
@@ -86,8 +108,10 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
             name: form.name,
             goal: form.goal,
             tags: form.tags,
+            leadIds: Array.from(form.selectedLeads),
             senderName: form.senderName,
             senderEmail: form.senderEmail,
+            sequence: form.steps,
             subjectLine: form.steps[0]?.subject || form.name,
         });
     };
@@ -95,7 +119,7 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]">
+            <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 pt-8 pb-6 border-b border-slate-100 flex-shrink-0">
@@ -105,7 +129,7 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
                         </div>
                         <div>
                             <h2 className="text-[18px] font-black text-slate-900">New Campaign</h2>
-                            <p className="text-[11px] text-slate-400 font-medium">Step {step} of 3</p>
+                            <p className="text-[11px] text-slate-400 font-medium tracking-wide">Step {step} of 4 • {form.selectedLeads.size} leads selected</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-all">
@@ -117,9 +141,11 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
                 <div className="flex items-center gap-4 px-8 py-4 bg-slate-50 border-b border-slate-100 flex-shrink-0">
                     <StepBadge step={1} current={step} label="Basics" />
                     <div className="flex-1 h-px bg-slate-200" />
-                    <StepBadge step={2} current={step} label="Sender" />
+                    <StepBadge step={2} current={step} label="Leads" />
                     <div className="flex-1 h-px bg-slate-200" />
-                    <StepBadge step={3} current={step} label="Sequence" />
+                    <StepBadge step={3} current={step} label="Sender" />
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <StepBadge step={4} current={step} label="Sequence" />
                 </div>
 
                 {/* Body */}
@@ -186,37 +212,143 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
                         </div>
                     )}
 
-                    {/* ── Step 2: Sender ── */}
+                    {/* ── Step 2: Leads ── */}
                     {step === 2 && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <div className="flex items-end justify-between mb-2">
+                                <div>
+                                    <p className="text-[12px] font-semibold text-slate-500">Select leads from your CRM to target with this campaign.</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            value={filters.search}
+                                            onChange={e => updateFilter('search', e.target.value)}
+                                            placeholder="Search leads..."
+                                            className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-medium focus:outline-none focus:border-primary transition-all w-48"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={selectAllLeads}
+                                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-black text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2"
+                                    >
+                                        {form.selectedLeads.size === leads.length ? 'Deselect All' : 'Select Page'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {isLoading ? (
+                                <div className="py-20 flex flex-col items-center justify-center gap-3">
+                                    <div className="w-8 h-8 border-2 border-primary border-t-transparent animate-spin rounded-full" />
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Hydrating leads...</p>
+                                </div>
+                            ) : leads.length === 0 ? (
+                                <div className="py-20 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                                    <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                                    <p className="text-[13px] font-black text-slate-500">No leads found</p>
+                                    <p className="text-[11px] text-slate-400 font-medium">Try adjusting your search filters.</p>
+                                </div>
+                            ) : (
+                                <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-50 border-b border-slate-100">
+                                            <tr>
+                                                <th className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 w-12">
+                                                    <div className="flex items-center justify-center">
+                                                        <div
+                                                            onClick={selectAllLeads}
+                                                            className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-all ${
+                                                                form.selectedLeads.size === leads.length ? 'bg-primary border-primary' : 'bg-white border-slate-300'
+                                                            }`}
+                                                        >
+                                                            {form.selectedLeads.size === leads.length && <Check className="w-3 h-3 text-black" strokeWidth={4} />}
+                                                        </div>
+                                                    </div>
+                                                </th>
+                                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Name / Company</th>
+                                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Email</th>
+                                                <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right pr-6">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {leads.map(l => (
+                                                <tr
+                                                    key={l.id}
+                                                    onClick={() => toggleLead(l.id)}
+                                                    className={`hover:bg-slate-50 cursor-pointer transition-colors ${form.selectedLeads.has(l.id) ? 'bg-primary/3' : ''}`}
+                                                >
+                                                    <td className="px-5 py-3">
+                                                        <div className="flex items-center justify-center">
+                                                            <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                                                form.selectedLeads.has(l.id) ? 'bg-primary border-primary' : 'bg-white border-slate-200'
+                                                            }`}>
+                                                                {form.selectedLeads.has(l.id) && <Check className="w-3 h-3 text-black" strokeWidth={4} />}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[12px] font-bold text-slate-900 leading-tight">{l.name}</span>
+                                                            <span className="text-[10px] text-slate-400 font-medium">{l.company}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className="text-[12px] font-medium text-slate-600">{l.email}</span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right pr-6">
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg uppercase tracking-wider ${
+                                                            l.status === 'interested' ? 'bg-emerald-100 text-emerald-700' :
+                                                            l.status === 'replied'    ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-slate-100 text-slate-500'
+                                                        }`}>
+                                                            {l.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            {errors.leads && <p className="text-[11px] text-red-500 mt-1 font-semibold">{errors.leads}</p>}
+                        </div>
+                    )}
+
+                    {/* ── Step 3: Sender ── */}
+                    {step === 3 && (
                         <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
                             <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl mb-4">
                                 <p className="text-[12px] font-bold text-slate-700">Emails will be sent from this sender identity. Make sure it matches your connected Gmail account.</p>
                             </div>
-                            <div>
-                                <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Sender Name *</label>
-                                <input
-                                    value={form.senderName}
-                                    onChange={e => set('senderName', e.target.value)}
-                                    placeholder="Your Name"
-                                    className={`w-full px-4 py-3 rounded-2xl border-2 text-[13px] font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none transition-all ${errors.senderName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`}
-                                />
-                                {errors.senderName && <p className="text-[11px] text-red-500 mt-1 font-semibold">{errors.senderName}</p>}
-                            </div>
-                            <div>
-                                <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Sender Email *</label>
-                                <input
-                                    value={form.senderEmail}
-                                    onChange={e => set('senderEmail', e.target.value)}
-                                    placeholder="you@company.com"
-                                    className={`w-full px-4 py-3 rounded-2xl border-2 text-[13px] font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none transition-all ${errors.senderEmail ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`}
-                                />
-                                {errors.senderEmail && <p className="text-[11px] text-red-500 mt-1 font-semibold">{errors.senderEmail}</p>}
+                            <div className="grid grid-cols-2 gap-5">
+                                <div>
+                                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Sender Name *</label>
+                                    <input
+                                        value={form.senderName}
+                                        onChange={e => set('senderName', e.target.value)}
+                                        placeholder="Your Name"
+                                        className={`w-full px-4 py-3 rounded-2xl border-2 text-[13px] font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none transition-all ${errors.senderName ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`}
+                                    />
+                                    {errors.senderName && <p className="text-[11px] text-red-500 mt-1 font-semibold">{errors.senderName}</p>}
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Sender Email *</label>
+                                    <input
+                                        value={form.senderEmail}
+                                        onChange={e => set('senderEmail', e.target.value)}
+                                        placeholder="you@company.com"
+                                        className={`w-full px-4 py-3 rounded-2xl border-2 text-[13px] font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none transition-all ${errors.senderEmail ? 'border-red-300' : 'border-slate-200 focus:border-primary'}`}
+                                    />
+                                    {errors.senderEmail && <p className="text-[11px] text-red-500 mt-1 font-semibold">{errors.senderEmail}</p>}
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ── Step 3: Sequence ── */}
-                    {step === 3 && (
+                    {/* ── Step 4: Sequence ── */}
+                    {step === 4 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                             <p className="text-[12px] font-semibold text-slate-500">Build your email sequence. Each step is sent after the previous with a delay.</p>
                             {form.steps.map((s, idx) => (
@@ -273,10 +405,10 @@ const CreateCampaignModal = ({ onClose, onCreate }) => {
                         {step === 1 ? 'Cancel' : '← Back'}
                     </button>
                     <button
-                        onClick={step === 3 ? handleSubmit : next}
+                        onClick={step === 4 ? handleSubmit : next}
                         className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[12px] font-black hover:bg-black transition-all shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 active:translate-y-0"
                     >
-                        {step === 3 ? (
+                        {step === 4 ? (
                             <><Megaphone className="w-4 h-4 text-primary" /> Create Campaign</>
                         ) : (
                             <>Continue <ChevronRight className="w-4 h-4 text-primary" /></>
