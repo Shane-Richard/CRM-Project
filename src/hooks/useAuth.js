@@ -24,9 +24,19 @@ export const useAuth = () => {
 
     const logout = useCallback(async () => {
         setLoading(true);
-        await supabase.auth.signOut();
+        try {
+            await supabase.auth.signOut();
+        } catch (err) {
+            console.warn('[Auth] signOut error (continuing):', err.message);
+        }
+        // Clear all CRM local state
+        localStorage.removeItem('txb_accounts');
+        localStorage.removeItem('txb_active_account_id');
+        localStorage.removeItem('txb_orgs');
         setUser(null);
         setLoading(false);
+        // Hard redirect — ensures no stale React state survives
+        window.location.href = '/';
     }, []);
 
     return {

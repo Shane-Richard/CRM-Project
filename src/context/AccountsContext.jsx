@@ -81,12 +81,24 @@ export const AccountsProvider = ({ children }) => {
     return newAccount;
   };
 
+  const removeAccount = (accountId) => {
+    setAccounts(prev => {
+      const updated = prev.filter(a => a.id !== accountId);
+      // Agar removed account active tha, toh next wale ko set karo
+      if (activeAccountId === accountId) {
+        setActiveAccountId(updated[0]?.id || null);
+      }
+      return updated;
+    });
+  };
+
   return (
     <AccountsContext.Provider value={{ 
       accounts, 
       activeAccount, 
       setActiveAccount: setActiveAccountId,
-      addAccount 
+      addAccount,
+      removeAccount
     }}>
       {children}
     </AccountsContext.Provider>

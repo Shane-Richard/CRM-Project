@@ -7,10 +7,13 @@ import {
   BarChart2, 
   Settings, 
   Hexagon,
-  Users2
+  Users2,
+  LogOut
 } from 'lucide-react';
 
-const Sidebar = ({ activeItem, navigate, unreadCount = 0 }) => {
+
+const Sidebar = ({ activeItem, navigate, unreadCount = 0, logout }) => {
+
   const [hoveredItem, setHoveredItem] = useState(null);
   const [hoveredRect, setHoveredRect] = useState(null);
 
@@ -114,6 +117,26 @@ const Sidebar = ({ activeItem, navigate, unreadCount = 0 }) => {
               </button>
             );
           })}
+
+          {/* Sign Out Button */}
+          <div className="pt-3 border-t border-white/5 w-full flex justify-center">
+            <button
+              onClick={() => {
+                if (window.confirm('Sign out from TXB Inbox CRM?')) {
+                  logout && logout();
+                }
+              }}
+              onMouseEnter={(e) => handleMouseEnter(e, 'Sign Out')}
+              onMouseLeave={handleMouseLeave}
+              className="w-11 h-11 flex items-center justify-center rounded-2xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-300 group relative"
+              title="Sign Out"
+            >
+              <LogOut
+                className="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110 group-hover:-translate-x-0.5"
+                strokeWidth={2}
+              />
+            </button>
+          </div>
         </div>
       </aside>
 

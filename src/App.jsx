@@ -140,19 +140,13 @@ const NavigationContent = () => {
                 </Suspense>
             );
 
-        case 'Sending':
-        case 'Templates':
-        case 'Accelerator':
-        case 'Debug':
-            return <ComingSoon module={activeItem} />;
-
         default:
             return <ComingSoon module={activeItem} />;
     }
 };
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
 
   if (loading) {
     return (
@@ -176,7 +170,7 @@ function App() {
           <UIProvider>
             <AccountsProvider>
               <EmailProvider>
-                <MainLayout>
+                <MainLayout logout={logout}>
                   <NavigationContent />
                 </MainLayout>
                 {/* Global Ctrl+K Command Palette — always mounted */}

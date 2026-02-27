@@ -4,7 +4,7 @@ import Header from './Header';
 import { useNavigation } from '../hooks/useNavigation';
 import { useEmailStore } from '../hooks/useEmailStore';
 
-const MainLayout = ({ children }) => {
+const MainLayout = ({ children, logout }) => {
   const { activeItem, navigate } = useNavigation();
   const { allMessages = [] } = useEmailStore();
 
@@ -16,7 +16,8 @@ const MainLayout = ({ children }) => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface">
       {/* Sidebar - Fixed Left (80px) */}
-      <Sidebar activeItem={activeItem} navigate={navigate} unreadCount={unreadCount} />
+      <Sidebar activeItem={activeItem} navigate={navigate} unreadCount={unreadCount} logout={logout} />
+
 
       {/* Content Container */}
       <div className="flex-1 ml-20 flex flex-col h-full bg-background relative overflow-hidden">

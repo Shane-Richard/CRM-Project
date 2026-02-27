@@ -13,8 +13,13 @@ import {
   User,
   Zap,
   Tag,
-  Hash
+  Hash,
+  X,
+  MoreHorizontal,
+  LogOut,
+  Wifi
 } from 'lucide-react';
+
 import UniversalModal from '../ui/UniversalModal';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useUI } from '../../hooks/useUI.jsx';
@@ -23,6 +28,7 @@ import ConnectionSelector from './ConnectionSelector';
 import { mailService } from '../../services/MailService';
 import { getAutoConfig } from '../../config/mailConfig';
 import { normalizeEmail } from '../../utils/normalizeEmail';
+import { useToast } from '../../hooks/useToast';
 
 const NavGroup = ({ title, children, defaultOpen = true, rightAction }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -60,7 +66,7 @@ const NavGroup = ({ title, children, defaultOpen = true, rightAction }) => {
   );
 };
 
-const FilterItem = memo(({ id, label, icon: Icon, activeFilter, onClick, count, color, isOnline }) => {
+const FilterItem = memo(({ id, label, icon: Icon, activeFilter, onClick, count, color, isOnline, isInbox, onRemove }) => {
   const isActive = activeFilter === id;
   
   return (
@@ -81,7 +87,7 @@ const FilterItem = memo(({ id, label, icon: Icon, activeFilter, onClick, count, 
         <span className={`text-[13px] tracking-tight truncate ${isActive ? 'font-bold' : 'font-medium'}`}>{label}</span>
       </div>
       
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         {isOnline && <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />}
         {count !== undefined && count > 0 && (
           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
@@ -89,6 +95,19 @@ const FilterItem = memo(({ id, label, icon: Icon, activeFilter, onClick, count, 
           }`}>
             {count}
           </span>
+        )}
+        {/* Remove button — only for inbox accounts, visible on hover */}
+        {isInbox && onRemove && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(id);
+            }}
+            className="opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-red-100 text-slate-400 hover:text-red-500 transition-all duration-200 flex-shrink-0"
+            title="Remove account"
+          >
+            <X className="w-3 h-3" />
+          </button>
         )}
       </div>
       
@@ -98,6 +117,137 @@ const FilterItem = memo(({ id, label, icon: Icon, activeFilter, onClick, count, 
     </button>
   );
 });
+
+
+// ─── Gmail Inbox Item with dropdown menu ───────────────────────────────────
+const GmailInboxItem = memo(({ inbox, activeFilter, onSelectFilter, count, onDisconnect, onSync, isSyncing }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const menuRef = React.useRef(null);
+  const isActive = activeFilter === inbox.id;
+  const label = normalizeEmail(inbox.label);
+
+  // Close menu on outside click
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  const handleDisconnect = async () => {
+    setMenuOpen(false);
+    setDisconnecting(true);
+    await onDisconnect(inbox.id, label);
+    setDisconnecting(false);
+  };
+
+  return (
+    <div className={`relative group flex items-center mb-0.5 rounded-xl transition-all duration-200 ${
+      isActive 
+        ? 'bg-white shadow-[0_4px_12px_rgba(0,0,0,0.05)] scale-[1.02] z-10' 
+        : 'hover:bg-slate-200/50'
+    }`}>
+      
+      {/* Main clickable row */}
+      <button
+        onClick={() => onSelectFilter(inbox.id)}
+        className="flex-1 flex items-center gap-3 px-3 py-2.5 min-w-0"
+      >
+        {/* Icon */}
+        <div className={`relative flex items-center justify-center w-7 h-7 rounded-lg flex-shrink-0 transition-all duration-300 ${
+          isActive ? 'bg-primary text-black' : 'bg-slate-100 group-hover:bg-white text-slate-400 group-hover:text-slate-600'
+        }`}>
+          {disconnecting 
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <User className="w-3.5 h-3.5" />
+          }
+          {/* Green online dot */}
+          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-white shadow-[0_0_6px_rgba(34,197,94,0.5)]" />
+        </div>
+
+        {/* Label + badge */}
+        <span className={`text-[13px] tracking-tight truncate flex-1 text-left ${
+          isActive ? 'font-bold text-slate-900' : 'font-medium text-slate-500 group-hover:text-slate-900'
+        }`}>
+          {label}
+        </span>
+
+        {count > 0 && (
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+            isActive ? 'bg-slate-100 text-slate-900' : 'bg-slate-200/50 text-slate-500'
+          }`}>
+            {count}
+          </span>
+        )}
+      </button>
+
+      {/* 3-dot menu button */}
+      <div className="relative flex-shrink-0 pr-2" ref={menuRef}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
+          className={`opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all duration-200 ${
+            menuOpen
+              ? 'opacity-100 bg-slate-200 text-slate-700'
+              : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'
+          }`}
+          title="Account options"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Dropdown */}
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150">
+            {/* Sync option */}
+            <button
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onSync && onSync(inbox.label); }}
+              disabled={isSyncing}
+              className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            >
+              <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                {isSyncing 
+                  ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                  : <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
+                }
+              </div>
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </button>
+
+            {/* Divider */}
+            <div className="h-px bg-slate-100 mx-3" />
+
+            {/* Disconnect */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDisconnect(); }}
+              disabled={disconnecting}
+              className="w-full flex items-center gap-3 px-4 py-3 text-[13px] font-semibold text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <div className="w-6 h-6 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+                {disconnecting 
+                  ? <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" />
+                  : <LogOut className="w-3.5 h-3.5 text-red-500" />
+                }
+              </div>
+              {disconnecting ? 'Disconnecting...' : 'Disconnect Gmail'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Active indicator bar */}
+      {isActive && (
+        <div className="absolute -left-1 top-2 bottom-2 w-1.5 bg-primary rounded-r-full shadow-[0_0_12px_rgba(178,244,14,0.4)]" />
+      )}
+    </div>
+  );
+});
+
+
 
 const FilterList = memo(({ 
   filters = [], 
@@ -113,8 +263,30 @@ const FilterList = memo(({
   lastSyncLabel
 }) => {
   const { isAddAccountOpen, modalView, setModalView, openAddAccountModal, closeAddAccountModal } = useUI();
-  const { addAccount } = useAccounts();
+  const { addAccount, removeAccount } = useAccounts();
   const { addOrganization } = useOrganization();
+  const { showToast } = useToast();
+
+  // ── Gmail disconnect handler
+  const handleDisconnectGmail = async (accountId, accountLabel) => {
+    try {
+      // 1. Stop all background sync
+      const { gmailSyncEngine } = await import('../../services/GmailSyncEngine');
+      gmailSyncEngine.destroy();
+
+      // 2. Clear Gmail token from localStorage
+      localStorage.removeItem('gmail_access_token');
+
+      // 3. Remove from accounts state
+      removeAccount(accountId);
+
+      showToast({ message: `"${accountLabel}" disconnected from Gmail`, type: 'success' });
+    } catch (err) {
+      console.error('[Disconnect] Error:', err);
+      showToast({ message: 'Failed to disconnect. Try again.', type: 'error' });
+    }
+  };
+
   const [searchLocal, setSearchLocal] = useState('');
 
   const [manualData, setManualData] = useState({
@@ -158,8 +330,15 @@ const FilterList = memo(({
               addAccount({ label: cleanEmail, type: 'gmail', ...res, email: cleanEmail });
               await addOrganization(cleanEmail, 'gmail.com');
               closeAddAccountModal();
+              showToast({ message: "Gmail account connected successfully", type: 'success' });
           } catch (error) {
               console.error("[OAuth Error]", error);
+              showToast({ 
+                message: error.message === 'Google Identity Services not loaded' 
+                    ? "Google login service not ready. Refresh and try again." 
+                    : "Connection failed: " + error.message, 
+                type: 'error' 
+              });
           }
           return;
       }
@@ -208,22 +387,19 @@ const FilterList = memo(({
         </div>
 
         <div className="flex-1">
-             {/* Campaigns Group */}
-             <NavGroup title="Campaigns" defaultOpen={true}>
-                {campaigns.length === 0 ? (
-                    <div className="px-3 py-4 text-center border-2 border-dashed border-slate-200 rounded-xl mx-3">
-                        <Hash className="w-5 h-5 text-slate-300 mx-auto mb-2" />
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No active campaigns</p>
-                    </div>
-                ) : campaigns.map((camp) => (
-                    <FilterItem 
-                        key={camp.id} 
-                        {...camp} 
-                        activeFilter={activeFilter} 
-                        onClick={onSelectFilter} 
-                    />
-                ))}
-             </NavGroup>
+             {/* Campaigns Group - Hidden if empty */}
+             {campaigns.length > 0 && (
+                 <NavGroup title="Campaigns" defaultOpen={true}>
+                    {campaigns.map((camp) => (
+                        <FilterItem 
+                            key={camp.id} 
+                            {...camp} 
+                            activeFilter={activeFilter} 
+                            onClick={onSelectFilter} 
+                        />
+                    ))}
+                 </NavGroup>
+             )}
 
              {/* Dynamic Status Filters */}
              <NavGroup title="Status" defaultOpen={true}>
@@ -252,17 +428,38 @@ const FilterList = memo(({
                 }
              >
                 {inboxes.map((inbox) => (
-                    <FilterItem 
-                        key={inbox.id}
-                        {...inbox}
-                        label={inbox.type === 'gmail' ? normalizeEmail(inbox.label) : inbox.label}
-                        icon={inbox.icon || User}
-                        count={counts[inbox.id] || 0}
-                        activeFilter={activeFilter}
-                        onClick={() => onSelectFilter(inbox.id)}
-                        isOnline={inbox.type === 'gmail' || inbox.status === 'connected'}
-                    />
+                    inbox.type === 'gmail' ? (
+                        <GmailInboxItem
+                            key={inbox.id}
+                            inbox={inbox}
+                            activeFilter={activeFilter}
+                            onSelectFilter={onSelectFilter}
+                            count={counts[inbox.id] || 0}
+                            isSyncing={isSyncing}
+                            onSync={onSync}
+                            onDisconnect={handleDisconnectGmail}
+                        />
+                    ) : (
+                        <FilterItem
+                            key={inbox.id}
+                            {...inbox}
+                            label={inbox.label}
+                            icon={inbox.icon || User}
+                            count={counts[inbox.id] || 0}
+                            activeFilter={activeFilter}
+                            onClick={() => onSelectFilter(inbox.id)}
+                            isOnline={inbox.status === 'connected'}
+                            isInbox={true}
+                            onRemove={(id) => {
+                              if (window.confirm(`Remove "${inbox.label}" from inboxes?`)) {
+                                removeAccount(id);
+                              }
+                            }}
+                        />
+                    )
                 ))}
+
+
                 
                 {/* Last Sync Mini-Indicator */}
                 {lastSyncTime && (
@@ -278,18 +475,21 @@ const FilterList = memo(({
                 )}
              </NavGroup>
 
-             {/* Standard Folders */}
-             <NavGroup title="Explore" defaultOpen={false}>
-                {moreFilters.map((item) => (
-                    <FilterItem 
-                        key={item.id}
-                        {...item}
-                        count={counts[item.id] || 0}
-                        activeFilter={activeFilter}
-                        onClick={() => onSelectFilter(item.id)}
-                    />
-                ))}
-             </NavGroup>
+             {/* Explore Section - Standard Folders */}
+             {moreFilters.length > 0 && (
+                <NavGroup title="Explore" defaultOpen={true}>
+                    {moreFilters.map((item) => (
+                        <FilterItem 
+                            key={item.id}
+                            {...item}
+                            count={counts[item.id] || 0}
+                            activeFilter={activeFilter}
+                            onClick={() => onSelectFilter(item.id)}
+                        />
+                    ))}
+                </NavGroup>
+             )}
+
         </div>
 
         {/* Footer Action */}
